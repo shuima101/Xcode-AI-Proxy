@@ -155,6 +155,21 @@ app.add_middleware(
 )
 
 
+# 添加请求日志中间件
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """记录所有HTTP请求"""
+    logger.info(f"📥 收到请求: {request.method} {request.url.path}")
+    logger.info(f"   Headers: {dict(request.headers)}")
+    try:
+        response = await call_next(request)
+        logger.info(f"📤 响应状态: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"❌ 请求处理失败: {str(e)}")
+        raise
+
+
 # 通用重试装饰器
 async def with_retry(operation, max_retries=MAX_RETRIES, base_delay=RETRY_DELAY):
     """通用异步重试函数"""
@@ -193,7 +208,22 @@ async def list_models():
             "object": "model",
             "created": 1677610602,
             "owned_by": config["type"],
-            "name": config.get("name", model_id),
+            "permission": [
+                {
+                    "id": f"modelperm-{model_id}",
+                    "object": "model_permission",
+                    "created": 1677610602,
+                    "allow_create_engine": False,
+                    "allow_sampling": True,
+                    "allow_logprobs": True,
+                    "allow_search_indices": False,
+                    "allow_view": True,
+                    "allow_fine_tuning": False,
+                    "organization": "*",
+                    "group": None,
+                    "is_blocking": False,
+                }
+            ],
         }
         for model_id, config in API_CONFIGS.items()
     ]
@@ -526,7 +556,7 @@ def main(port=PORT, host=HOST):
     logger.info("   ANTHROPIC_AUTH_TOKEN: any-string-works")
     logger.info("🔧 功能: 智谱/Kimi/DeepSeek代理，流式响应，动态配置，智能重试")
 
-    uvicorn.run("server:app", host=host, port=port, reload=False, log_level="info")
+    uvicorn.run("server:app", host=host, port=port, reload=False, log_level="debug")
 
 
 if __name__ == "__main__":
